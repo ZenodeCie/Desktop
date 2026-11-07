@@ -53,6 +53,13 @@ pub struct RegisterHostResponse {
     pub name: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct WorkerCredentialResponse {
+    worker_token: String,
+    host_id: String,
+    expires_at: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct HostHeartbeatPayload {
     host_id: String,
@@ -111,6 +118,12 @@ impl CoreClient {
 
     pub fn expires_at(&self) -> Option<String> {
         self.vault.get("auth:expires_at")
+    }
+
+    /// Crédentiale exclusivement destinée au worker local. Elle reste dans le
+    /// coffre chiffré et n'est jamais renvoyée à l'interface web.
+    pub fn worker_token(&self) -> Option<String> {
+        self.vault.get("worker:token")
     }
 
     pub fn auth_state(&self) -> AuthState {
@@ -347,7 +360,41 @@ impl CoreClient {
         };
         self.vault.set("host:host_id", &identity.host_id)?;
         self.vault.set("auth:host_id", &identity.host_id)?;
+        self.refresh_worker_credential(&identity.host_id).await?;
         Ok(identity)
+    }
+
+    pub async fn refresh_worker_credential(&self, host_id: &str) -> AppResult<()> {
+        let value = self
+            .authorized(
+                reqwest::Method::POST,
+                &format!("/api/desktop/v1/hosts/{host_id}/worker-credential"),
+                None,
+            )
+            .await?;
+        let credential: WorkerCredentialResponse = serde_json::from_value(value)
+            .map_err(|_| err("Réponse de crédentiale worker invalide."))?;
+        if credential.host_id != host_id || credential.worker_token.trim().is_empty() {
+            return Err(err("Crédentiale worker refusée par le Core."));
+        }
+        self.vault.set("worker:token", credential.worker_token)?;
+        self.vault.set("worker:expires_at", credential.expires_at)?;
+        Ok(())
+    }
+
+    async fn ensure_worker_credential(&self, host_id: &str) -> AppResult<()> {
+        let renew_after = chrono::Utc::now() + chrono::Duration::hours(24);
+        let valid = self
+            .vault
+            .get("worker:expires_at")
+            .and_then(|value| chrono::DateTime::parse_from_rfc3339(&value).ok())
+            .map(|value| value.with_timezone(&chrono::Utc) > renew_after)
+            .unwrap_or(false)
+            && self.worker_token().is_some();
+        if valid {
+            return Ok(());
+        }
+        self.refresh_worker_credential(host_id).await
     }
 
     pub async fn heartbeat(
@@ -560,6 +607,8 @@ impl CoreClient {
             "auth:device_code",
             "host:host_id",
             "auth:host_id",
+            "worker:token",
+            "worker:expires_at",
         ] {
             let _ = self.vault.remove(key);
         }
@@ -579,6 +628,7 @@ impl CoreClient {
             }
         };
         let stats = host_hardware();
+        self.ensure_worker_credential(&host.host_id).await?;
         let bots = manager.host_stats()["bots"].clone();
         let bots = bots.as_array().cloned().unwrap_or_default();
         manager.mark_synced();

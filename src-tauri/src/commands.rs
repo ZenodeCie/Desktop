@@ -428,9 +428,7 @@ pub fn open_logs_folder(state: State<'_, AppState>) -> AppResult<()> {
 pub fn open_storage_access_settings() -> AppResult<()> {
     #[cfg(target_os = "macos")]
     {
-        return open_external(
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
-        );
+        open_external("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
     }
 
     #[cfg(not(target_os = "macos"))]

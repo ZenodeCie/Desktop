@@ -43,26 +43,58 @@ impl Vault {
         if !self.path.exists() {
             return Ok(());
         }
-        let raw = std::fs::read_to_string(&self.path)?;
+        let raw = match std::fs::read_to_string(&self.path) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("[vault] Impossible de lire {}: {}", self.path.display(), e);
+                return Ok(());
+            }
+        };
         if raw.trim().is_empty() {
             return Ok(());
         }
-        let blob = base64::engine::general_purpose::STANDARD
-            .decode(raw.trim())
-            .map_err(|_| err("Coffre de secrets illisible"))?;
+        let blob = match base64::engine::general_purpose::STANDARD.decode(raw.trim()) {
+            Ok(b) => b,
+            Err(_) => {
+                eprintln!("[vault] Coffre illisible (base64 invalide), réinitialisation.");
+                self.backup_corrupted();
+                return Ok(());
+            }
+        };
         if blob.len() < 13 {
-            return Err(err("Coffre de secrets corrompu"));
+            eprintln!("[vault] Coffre tronqué, réinitialisation.");
+            self.backup_corrupted();
+            return Ok(());
         }
         let (nonce, ciphertext) = blob.split_at(12);
         let cipher =
             Aes256Gcm::new_from_slice(&self.key).map_err(|_| err("Clé du coffre invalide"))?;
-        let plain = cipher
-            .decrypt(Nonce::from_slice(nonce), ciphertext)
-            .map_err(|_| err("Impossible de déverrouiller le coffre local"))?;
-        let map: HashMap<String, String> =
-            serde_json::from_slice(&plain).map_err(|_| err("Coffre de secrets corrompu"))?;
+        let plain = match cipher.decrypt(Nonce::from_slice(nonce), ciphertext) {
+            Ok(p) => p,
+            Err(_) => {
+                eprintln!("[vault] Impossible de déverrouiller le coffre local (clé système modifiée ou inaccessible). Réinitialisation de sécurité avec sauvegarde.");
+                self.backup_corrupted();
+                return Ok(());
+            }
+        };
+        let map: HashMap<String, String> = match serde_json::from_slice(&plain) {
+            Ok(m) => m,
+            Err(_) => {
+                eprintln!("[vault] Contenu JSON du coffre corrompu, réinitialisation.");
+                self.backup_corrupted();
+                return Ok(());
+            }
+        };
         *self.values.write() = map;
         Ok(())
+    }
+
+    fn backup_corrupted(&self) {
+        if self.path.exists() {
+            let backup_name = format!("secrets.corrupt-{}", chrono::Utc::now().timestamp());
+            let backup_path = self.path.with_file_name(backup_name);
+            let _ = std::fs::rename(&self.path, backup_path);
+        }
     }
 
     fn persist(&self) -> AppResult<()> {
@@ -107,41 +139,52 @@ impl Vault {
 }
 
 fn load_or_create_key(vault_path: &Path) -> AppResult<[u8; 32]> {
+    let dir = vault_path
+        .parent()
+        .ok_or_else(|| err("Dossier du coffre introuvable"))?;
+    let key_path = dir.join(KEY_FILE);
+
+    // 1. Chercher d'abord dans le trousseau système
     if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
         if let Ok(stored) = entry.get_password() {
             if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(stored) {
                 if bytes.len() == 32 {
                     let mut key = [0u8; 32];
                     key.copy_from_slice(&bytes);
+                    if !key_path.exists() {
+                        let encoded = base64::engine::general_purpose::STANDARD.encode(key);
+                        let _ = atomic_write(&key_path, encoded.as_bytes(), true);
+                    }
                     return Ok(key);
                 }
             }
         }
-        let mut key = [0u8; 32];
-        rand::rngs::OsRng.fill_bytes(&mut key);
-        let encoded = base64::engine::general_purpose::STANDARD.encode(key);
-        if entry.set_password(&encoded).is_ok() {
-            return Ok(key);
-        }
     }
 
-    let dir = vault_path
-        .parent()
-        .ok_or_else(|| err("Dossier du coffre introuvable"))?;
-    let key_path = dir.join(KEY_FILE);
+    // 2. Si le trousseau est indisponible ou vide, chercher la clé dans .vault-key
     if let Ok(raw) = std::fs::read_to_string(&key_path) {
         if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(raw.trim()) {
             if bytes.len() == 32 {
                 let mut key = [0u8; 32];
                 key.copy_from_slice(&bytes);
+                // Tenter de resynchroniser avec le trousseau si possible
+                if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+                    let encoded = base64::engine::general_purpose::STANDARD.encode(key);
+                    let _ = entry.set_password(&encoded);
+                }
                 return Ok(key);
             }
         }
     }
+
+    // 3. Aucune clé existante : en générer une nouvelle et la stocker aux deux endroits
     let mut key = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut key);
     let encoded = base64::engine::general_purpose::STANDARD.encode(key);
     atomic_write(&key_path, encoded.as_bytes(), true)?;
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+        let _ = entry.set_password(&encoded);
+    }
     Ok(key)
 }
 
@@ -193,4 +236,40 @@ impl std::fmt::Debug for Vault {
 #[allow(dead_code)]
 pub fn map_err_io(context: &str) -> impl FnOnce(std::io::Error) -> AppError + '_ {
     move |_| AppError::Message(context.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vault_roundtrip_and_corruption_recovery() {
+        let dir = std::env::temp_dir().join(format!("zenode-vault-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let vault_file = dir.join("secrets.enc");
+
+        // 1. Initialisation et écriture
+        let vault = Vault::open(&vault_file).unwrap();
+        vault.set("token:discord", "super-secret-token").unwrap();
+        assert_eq!(
+            vault.get("token:discord").as_deref(),
+            Some("super-secret-token")
+        );
+
+        // 2. Réouverture
+        let vault2 = Vault::open(&vault_file).unwrap();
+        assert_eq!(
+            vault2.get("token:discord").as_deref(),
+            Some("super-secret-token")
+        );
+
+        // 3. Fichier corrompu ou chiffré avec une autre clé
+        std::fs::write(&vault_file, "bm90LWEtdmFsaWQtY2lwaGVydGV4dAo=").unwrap();
+        let vault_recovered = Vault::open(&vault_file).unwrap();
+        // Le coffre ne doit pas crasher, mais se réinitialiser
+        assert_eq!(vault_recovered.get("token:discord"), None);
+
+        // Nettoyage
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

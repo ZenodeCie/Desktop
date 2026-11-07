@@ -1,0 +1,315 @@
+/**
+ * Charte Zenode — copie fidèle des tokens du site (Core/website/frontend/shared/styles/theme.css).
+ *
+ * La hiérarchie se construit par la typographie et les bordures, pas par la
+ * couleur. Le vert ne sert qu'à l'action primaire, à l'état actif et au succès.
+ * Toute évolution de la charte doit être reportée ici ET dans le Core.
+ */
+
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
+@source './**/*.{ts,tsx}';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme {
+  /* ---------------------------------------------------------------- palette */
+
+  --color-brand-50: #f1f6f3;
+  --color-brand-100: #dce9e1;
+  --color-brand-200: #bad3c4;
+  --color-brand-300: #8fb6a1;
+  --color-brand-400: #62947c;
+  --color-brand-500: #41755e;
+  --color-brand-600: #2f5c49;
+  --color-brand-700: #26493a;
+  --color-brand-800: #1e3a2e;
+  --color-brand-900: #16291f;
+  --color-brand-950: #0b1712;
+
+  --color-stone-0: #ffffff;
+  --color-stone-25: #fafaf9;
+  --color-stone-50: #f4f4f3;
+  --color-stone-100: #ededeb;
+  --color-stone-200: #e7e7e5;
+  --color-stone-300: #d2d2ce;
+  --color-stone-400: #a8a8a3;
+  --color-stone-500: #7a7a73;
+  --color-stone-600: #57574f;
+  --color-stone-700: #3d3d37;
+  --color-stone-800: #2a2a26;
+  --color-stone-900: #1a1a17;
+  --color-stone-950: #111110;
+
+  --color-info-500: #175cd3;
+  --color-info-700: #12408f;
+  --color-warn-500: #b45309;
+  --color-warn-700: #7c3d07;
+  --color-danger-500: #b42318;
+  --color-danger-700: #7f1d14;
+
+  --color-discord: #5865f2;
+
+  /* ------------------------------------------------------------ sémantique */
+
+  --color-canvas: var(--zn-canvas);
+  --color-surface: var(--zn-surface);
+  --color-raised: var(--zn-raised);
+  --color-sunken: var(--zn-sunken);
+  --color-overlay: var(--zn-overlay);
+
+  --color-line: var(--zn-line);
+  --color-line-strong: var(--zn-line-strong);
+
+  --color-fg: var(--zn-fg);
+  --color-fg-muted: var(--zn-fg-muted);
+  --color-fg-subtle: var(--zn-fg-subtle);
+  --color-fg-inverse: var(--zn-fg-inverse);
+
+  --color-accent: var(--zn-accent);
+  --color-accent-hover: var(--zn-accent-hover);
+  --color-accent-fg: var(--zn-accent-fg);
+  --color-accent-soft: var(--zn-accent-soft);
+  --color-accent-soft-fg: var(--zn-accent-soft-fg);
+
+  --color-success: var(--zn-success);
+  --color-success-soft: var(--zn-success-soft);
+  --color-success-fg: var(--zn-success-fg);
+  --color-info: var(--zn-info);
+  --color-info-soft: var(--zn-info-soft);
+  --color-info-fg: var(--zn-info-fg);
+  --color-warn: var(--zn-warn);
+  --color-warn-soft: var(--zn-warn-soft);
+  --color-warn-fg: var(--zn-warn-fg);
+  --color-danger: var(--zn-danger);
+  --color-danger-soft: var(--zn-danger-soft);
+  --color-danger-fg: var(--zn-danger-fg);
+  --color-neutral-soft: var(--zn-neutral-soft);
+  --color-neutral-soft-fg: var(--zn-neutral-soft-fg);
+
+  /* ----------------------------------------------------------- typographie */
+
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+  --text-md: 1rem;
+  --text-md--line-height: 1.5rem;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.875rem;
+  --text-2xl: 1.875rem;
+  --text-2xl--line-height: 2.25rem;
+  --text-3xl: 2.375rem;
+  --text-3xl--line-height: 2.75rem;
+  --text-4xl: 3rem;
+  --text-4xl--line-height: 3.25rem;
+
+  /* --------------------------------------------------------------- formes */
+
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-ctl: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --shadow-raised: 0 1px 2px rgb(17 17 16 / 0.05), 0 1px 3px rgb(17 17 16 / 0.04);
+  --shadow-overlay: 0 4px 6px -2px rgb(17 17 16 / 0.06), 0 12px 24px -6px rgb(17 17 16 / 0.14);
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+
+  --spacing-sidebar: 14rem;
+  --spacing-topbar: 3.25rem;
+  --container-content: 80rem;
+}
+
+:root,
+[data-theme='light'] {
+  --zn-canvas: var(--color-stone-25);
+  --zn-surface: var(--color-stone-0);
+  --zn-raised: var(--color-stone-0);
+  --zn-sunken: var(--color-stone-50);
+  --zn-overlay: var(--color-stone-0);
+  --zn-line: var(--color-stone-200);
+  --zn-line-strong: var(--color-stone-300);
+  --zn-fg: var(--color-stone-950);
+  --zn-fg-muted: var(--color-stone-600);
+  --zn-fg-subtle: var(--color-stone-600);
+  --zn-fg-inverse: var(--color-stone-0);
+  --zn-accent: var(--color-brand-600);
+  --zn-accent-hover: var(--color-brand-700);
+  --zn-accent-fg: #ffffff;
+  --zn-accent-soft: var(--color-brand-50);
+  --zn-accent-soft-fg: var(--color-brand-700);
+  --zn-success: var(--color-brand-600);
+  --zn-success-soft: #e8f1ec;
+  --zn-success-fg: var(--color-brand-700);
+  --zn-info: var(--color-info-500);
+  --zn-info-soft: #e8effb;
+  --zn-info-fg: var(--color-info-700);
+  --zn-warn: var(--color-warn-500);
+  --zn-warn-soft: #fdf3e7;
+  --zn-warn-fg: var(--color-warn-700);
+  --zn-danger: var(--color-danger-500);
+  --zn-danger-soft: #fdecea;
+  --zn-danger-fg: var(--color-danger-700);
+  --zn-neutral-soft: var(--color-stone-100);
+  --zn-neutral-soft-fg: var(--color-stone-700);
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --zn-canvas: var(--color-stone-950);
+  --zn-surface: #17171a;
+  --zn-raised: #1e1e21;
+  --zn-sunken: #121214;
+  --zn-overlay: #1e1e21;
+  --zn-line: #2e2e31;
+  --zn-line-strong: #3d3d41;
+  --zn-fg: #f3f3f1;
+  --zn-fg-muted: #a3a39d;
+  --zn-fg-subtle: #7f7f79;
+  --zn-fg-inverse: var(--color-stone-950);
+  --zn-accent: var(--color-brand-400);
+  --zn-accent-hover: var(--color-brand-300);
+  --zn-accent-fg: var(--color-brand-950);
+  --zn-accent-soft: #16291f;
+  --zn-accent-soft-fg: var(--color-brand-200);
+  --zn-success: var(--color-brand-400);
+  --zn-success-soft: #16291f;
+  --zn-success-fg: var(--color-brand-200);
+  --zn-info: #6d9eef;
+  --zn-info-soft: #14203a;
+  --zn-info-fg: #a9c6f7;
+  --zn-warn: #e0913c;
+  --zn-warn-soft: #2c2013;
+  --zn-warn-fg: #eec18a;
+  --zn-danger: #e0736a;
+  --zn-danger-soft: #2e1715;
+  --zn-danger-fg: #f0a9a2;
+  --zn-neutral-soft: #26262a;
+  --zn-neutral-soft-fg: #c8c8c3;
+  color-scheme: dark;
+  --shadow-raised: 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-overlay: 0 0 0 1px rgb(255 255 255 / 0.06), 0 16px 32px -8px rgb(0 0 0 / 0.6);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 600;
+    letter-spacing: -0.014em;
+    color: var(--color-fg);
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+    font-feature-settings: normal;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-soft);
+    color: var(--color-accent-soft-fg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-line-strong);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-fg-subtle);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-line-strong);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  .tech {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    letter-spacing: -0.01em;
+  }
+
+  .titlebar-drag {
+    -webkit-app-region: drag;
+  }
+
+  .titlebar-no-drag {
+    -webkit-app-region: no-drag;
+  }
+}

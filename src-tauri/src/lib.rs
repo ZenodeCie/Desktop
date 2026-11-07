@@ -127,6 +127,7 @@ pub fn run() {
             commands::check_updates,
             commands::open_url,
             commands::open_logs_folder,
+            commands::open_storage_access_settings,
             commands::local_host_stats,
             commands::hide_window,
             commands::show_window,

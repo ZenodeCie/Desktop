@@ -27,6 +27,7 @@ import {
   Progress,
   Spinner,
 } from '../components/ui';
+import zenodeLogo from '../assets/zenode-logo.svg';
 
 export function OnboardingPage() {
   const { info, reload, runtimeInstalled, authenticated } = useApp();
@@ -150,17 +151,10 @@ export function OnboardingPage() {
 
   return (
     <div className="relative flex h-full flex-col overflow-y-auto bg-canvas">
-      <div className="titlebar-drag absolute inset-x-0 top-0 h-7" />
+      <div className="titlebar-drag absolute inset-x-0 top-0 h-7" data-tauri-drag-region />
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 pb-10 pt-14">
         <div className="mb-8 flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-700 text-brand-100">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M12 4.5 20 17H4L12 4.5Z" strokeLinejoin="round" />
-              <circle cx="12" cy="4.5" r="1.6" fill="currentColor" stroke="none" />
-              <circle cx="4" cy="17" r="1.6" fill="currentColor" stroke="none" />
-              <circle cx="20" cy="17" r="1.6" fill="currentColor" stroke="none" />
-            </svg>
-          </span>
+          <img src={zenodeLogo} alt="" className="h-10 w-10 rounded-lg" />
           <div>
             <p className="text-md font-semibold tracking-tight">Bienvenue dans Zenode Host</p>
             <p className="text-xs text-fg-muted">

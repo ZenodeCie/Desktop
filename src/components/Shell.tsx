@@ -18,6 +18,7 @@ import { api, errorMessage } from '../lib/api';
 import { formatRelative, initials } from '../lib/format';
 import { useApp, useToast } from '../lib/store';
 import { Badge, Button, StatusDot } from './ui';
+import zenodeLogo from '../assets/zenode-logo.svg';
 
 const NAV = [
   { to: '/', label: 'Bots', icon: Bot, end: true },
@@ -41,7 +42,10 @@ export function Shell() {
   return (
     <div className="flex h-full flex-col bg-canvas text-fg">
       {isMac ? (
-        <div className="titlebar-drag h-7 shrink-0 border-b border-line/60 bg-surface/70" />
+        <div
+          className="titlebar-drag h-7 shrink-0 border-b border-line/60 bg-surface/70"
+          data-tauri-drag-region
+        />
       ) : null}
       <div className="flex min-h-0 flex-1">
         <Sidebar />
@@ -67,14 +71,7 @@ function Sidebar() {
   return (
     <aside className="flex w-sidebar shrink-0 flex-col border-r border-line bg-surface">
       <div className="flex h-topbar items-center gap-2.5 px-4">
-        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-brand-700 text-brand-100">
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M12 4.5 20 17H4L12 4.5Z" strokeLinejoin="round" />
-            <circle cx="12" cy="4.5" r="1.6" fill="currentColor" stroke="none" />
-            <circle cx="4" cy="17" r="1.6" fill="currentColor" stroke="none" />
-            <circle cx="20" cy="17" r="1.6" fill="currentColor" stroke="none" />
-          </svg>
-        </span>
+        <img src={zenodeLogo} alt="" className="h-7 w-7 rounded-md" />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold tracking-tight">Zenode Host</p>
           <p className="truncate text-2xs text-fg-subtle">Hébergement de bots</p>

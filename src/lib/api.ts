@@ -98,6 +98,7 @@ export const api = {
   checkUpdates: () => invoke<UpdateInfo | null>('check_updates'),
   openUrl: (url: string) => invoke<void>('open_url', { url }),
   openLogsFolder: () => invoke<void>('open_logs_folder'),
+  openStorageAccessSettings: () => invoke<void>('open_storage_access_settings'),
   localStats: () => invoke<unknown>('local_host_stats'),
   hideWindow: () => invoke<void>('hide_window'),
   showWindow: () => invoke<void>('show_window'),

@@ -477,6 +477,16 @@ export function SettingsPage() {
                 >
                   Ouvrir les logs
                 </Button>
+                {info?.os === 'macos' ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<ShieldCheck size={13} />}
+                    onClick={() => void api.openStorageAccessSettings()}
+                  >
+                    Autoriser l’accès
+                  </Button>
+                ) : null}
                 <Button
                   size="sm"
                   variant="ghost"

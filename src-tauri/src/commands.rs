@@ -422,6 +422,19 @@ pub fn open_logs_folder(state: State<'_, AppState>) -> AppResult<()> {
     open_external(&state.manager.paths().logs_dir.to_string_lossy())
 }
 
+/// macOS ne permet pas à une app de s'ajouter elle-même aux accès complets au
+/// disque : l'utilisateur confirme toujours l'autorisation dans Réglages.
+#[tauri::command]
+pub fn open_storage_access_settings() -> AppResult<()> {
+    #[cfg(target_os = "macos")]
+    {
+        return open_external("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles");
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    Ok(())
+}
+
 #[tauri::command]
 pub fn local_host_stats(state: State<'_, AppState>) -> Value {
     let (cpu, used, total) = core::host_hardware();

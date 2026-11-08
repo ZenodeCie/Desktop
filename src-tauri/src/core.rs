@@ -215,15 +215,6 @@ impl CoreClient {
         if !response.status().is_success() {
             return Err(http_error(response).await);
         }
-        let response = self
-            .http_client()
-            .post(url)
-            .json(&payload)
-            .send()
-            .await?;
-        if !response.status().is_success() {
-            return Err(http_error(response).await);
-        }
         let body: PairStartResponse = response.json().await?;
         self.vault.set("auth:device_code", &body.device_code)?;
         Ok(PairingInfo {

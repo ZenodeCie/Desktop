@@ -243,7 +243,7 @@ export function BotDetailPage() {
           />
         ) : null}
         {tab === 'logs' ? <LogsTab botId={bot.id} /> : null}
-        {tab === 'files' ? <FilesTab botId={bot.id} /> : null}
+        {tab === 'files' ? <FilesTab bot={bot} /> : null}
         {tab === 'settings' ? <SettingsTab bot={bot} onChanged={refresh} /> : null}
       </div>
     </>
@@ -692,7 +692,8 @@ function LogLineView({ log, compact = false }: { log: LogLine; compact?: boolean
 
 /* -------------------------------------------------------------- fichiers */
 
-function FilesTab({ botId }: { botId: string }) {
+function FilesTab({ bot }: { bot: BotSummary }) {
+  const botId = bot.id;
   const { theme } = useApp();
   const toast = useToast();
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -780,7 +781,13 @@ function FilesTab({ botId }: { botId: string }) {
   const dirty = content !== original;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
+    <div className="flex flex-col gap-3">
+      <p className="rounded-lg border border-line bg-sunken px-3 py-2 text-2xs text-fg-muted">
+        {bot.has_custom_code
+          ? 'Ce bot utilise le fork de code du cluster à code modifié : les modifications sont partagées par les bots de ce cluster, pas par les clusters classiques.'
+          : 'Ce bot utilise le code worker partagé : toute modification s’applique à tous les bots classiques de cette machine.'}
+      </p>
+      <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
       <Card className="flex max-h-[calc(100vh-15rem)] min-h-72 flex-col overflow-hidden">
         <CardHeader
           title="Fichiers"
@@ -884,6 +891,7 @@ function FilesTab({ botId }: { botId: string }) {
           </div>
         ) : null}
       </Card>
+      </div>
 
       <Modal
         open={newOpen}

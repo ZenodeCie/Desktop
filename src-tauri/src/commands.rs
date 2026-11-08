@@ -5,7 +5,8 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::bot::{BotManager, CreateBotInput};
+use crate::bot::BotManager;
+use crate::bot::CreateBotInput;
 use crate::core::{self, CoreClient};
 use crate::error::{err, AppResult};
 use crate::models::*;
@@ -70,11 +71,6 @@ pub fn list_bots(state: State<'_, AppState>) -> Vec<BotSummary> {
 #[tauri::command]
 pub fn get_bot(state: State<'_, AppState>, id: String) -> AppResult<BotSummary> {
     state.manager.get(&id)
-}
-
-#[tauri::command]
-pub fn create_bot(state: State<'_, AppState>, input: CreateBotInput) -> AppResult<BotSummary> {
-    state.manager.create(input)
 }
 
 #[tauri::command]
@@ -252,28 +248,49 @@ pub async fn create_cluster(
     name: String,
     visibility: String,
     description: Option<String>,
+    has_custom_code: Option<bool>,
 ) -> AppResult<Value> {
     if !matches!(visibility.as_str(), "private" | "public") {
         return Err(err("Visibilité invalide."));
     }
     state
         .core
-        .create_cluster(&name, &visibility, description.as_deref().unwrap_or(""))
+        .create_cluster(
+            &name,
+            &visibility,
+            description.as_deref().unwrap_or(""),
+            has_custom_code.unwrap_or(false),
+        )
         .await
 }
 
-#[tauri::command]
-pub async fn join_cluster(state: State<'_, AppState>, code: String) -> AppResult<Value> {
-    let code = code.trim();
-    if code.len() < 4 || code.len() > 128 {
-        return Err(err("Code d'invitation invalide."));
-    }
-    state.core.join_cluster(code).await
+#[derive(Deserialize)]
+pub struct CatalogInstallInput {
+    pub slug: String,
+    pub name: Option<String>,
+    pub token: String,
 }
 
 #[tauri::command]
-pub async fn leave_cluster(state: State<'_, AppState>, cluster_id: String) -> AppResult<Value> {
-    state.core.leave_cluster(&cluster_id).await
+pub async fn install_catalog_bot(
+    state: State<'_, AppState>,
+    input: CatalogInstallInput,
+) -> AppResult<BotSummary> {
+    let catalog = state.core.catalog().await?;
+    let bot = catalog
+        .into_iter()
+        .find(|item| item.slug == input.slug)
+        .ok_or_else(|| err("Bot introuvable dans le catalogue."))?;
+    let summary = state.manager.create(CreateBotInput {
+        name: input.name.unwrap_or_else(|| bot.name.clone()),
+        description: bot.description.clone(),
+        token: Some(input.token),
+        auto_start: false,
+    })?;
+    if let Some(url) = bot.source_url.as_deref() {
+        let _ = state.manager.install_source(&summary.record.id, url).await;
+    }
+    state.manager.get(&summary.record.id)
 }
 
 #[tauri::command]
@@ -369,35 +386,6 @@ pub async fn block_cluster_bot(
 #[tauri::command]
 pub async fn list_catalog(state: State<'_, AppState>) -> AppResult<Vec<CatalogBot>> {
     state.core.catalog().await
-}
-
-#[derive(Deserialize)]
-pub struct CatalogInstallInput {
-    pub slug: String,
-    pub name: Option<String>,
-    pub token: String,
-}
-
-#[tauri::command]
-pub async fn install_catalog_bot(
-    state: State<'_, AppState>,
-    input: CatalogInstallInput,
-) -> AppResult<BotSummary> {
-    let catalog = state.core.catalog().await?;
-    let bot = catalog
-        .into_iter()
-        .find(|item| item.slug == input.slug)
-        .ok_or_else(|| err("Bot introuvable dans le catalogue."))?;
-    let summary = state.manager.create(CreateBotInput {
-        name: input.name.unwrap_or_else(|| bot.name.clone()),
-        description: bot.description.clone(),
-        token: Some(input.token),
-        auto_start: false,
-    })?;
-    if let Some(url) = bot.source_url.as_deref() {
-        let _ = state.manager.install_source(&summary.record.id, url).await;
-    }
-    state.manager.get(&summary.record.id)
 }
 
 #[tauri::command]

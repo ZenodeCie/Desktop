@@ -161,6 +161,9 @@ export function ClusterDetailPage() {
               )}
             </Badge>
             <Badge tone="neutral">{detail.role}</Badge>
+            {detail.is_community ? <Badge tone="warn">Communauté</Badge> : null}
+            {detail.has_custom_code ? <Badge tone="accent">Code modifié</Badge> : null}
+            {detail.backup_enabled ? <Badge tone="success">Backup 48 h</Badge> : null}
             <Badge tone={detail.health === 'healthy' ? 'success' : 'warn'} dot>
               {humanStatus(detail.health)}
             </Badge>
@@ -222,6 +225,20 @@ export function ClusterDetailPage() {
             <span className="font-mono font-semibold tracking-wider">{detail.invite_code}</span>
           </div>
           <CopyButton value={detail.invite_code} label="Copier le code" />
+        </div>
+      ) : null}
+
+      {detail.is_community && detail.visibility === 'public' ? (
+        <div className="mb-4 rounded-lg border border-warn/40 bg-warn-soft px-4 py-2.5 text-xs text-warn-fg">
+          Ce VM Worker appartient à un particulier. Il n’est ni exploité ni supervisé par
+          Zenode : n’hébergez que des bots dont vous acceptez le code et l’origine.
+        </div>
+      ) : null}
+
+      {detail.has_custom_code ? (
+        <div className="mb-4 rounded-lg border border-accent/40 bg-accent-soft px-4 py-2.5 text-xs text-accent-soft-fg">
+          Ce VM Worker utilise un code de bot modifié. Il est séparé des clusters classiques
+          et n’a pas été vérifié par Zenode.
         </div>
       ) : null}
 

@@ -56,10 +56,30 @@ impl AppPaths {
             &self.runtime_dir,
             &self.logs_dir,
             &self.cache_dir,
+            &self.configs_dir(),
+            &self.worker_code_dir(),
         ] {
             std::fs::create_dir_all(dir)?;
         }
         Ok(())
+    }
+
+    /// Code unique partagé par tous les bots à code officiel.
+    pub fn worker_code_dir(&self) -> PathBuf {
+        self.data_dir.join("worker")
+    }
+
+    /// Code personnalisé d'un cluster (fork), isolé du code officiel.
+    pub fn cluster_code_dir(&self, cluster_id: &str) -> AppResult<PathBuf> {
+        if !is_valid_id(cluster_id) {
+            return Err(err("Identifiant de cluster invalide"));
+        }
+        Ok(self.data_dir.join("cluster-code").join(cluster_id))
+    }
+
+    /// Configuration par bot (le code reste partagé).
+    pub fn configs_dir(&self) -> PathBuf {
+        self.data_dir.join("configs")
     }
 
     /// Valide qu'un identifiant de bot ne peut pas s'échapper du dossier bots.

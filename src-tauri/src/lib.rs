@@ -57,6 +57,7 @@ pub fn run() {
             build_tray(&handle)?;
             spawn_monitor(handle.clone());
             spawn_sync(handle.clone());
+            spawn_backup(handle.clone());
 
             // Démarre les bots marqués `auto_start` en arrière-plan : l'UI ne
             // doit pas attendre les installations de dépendances.
@@ -88,7 +89,6 @@ pub fn run() {
             commands::save_settings,
             commands::list_bots,
             commands::get_bot,
-            commands::create_bot,
             commands::update_bot,
             commands::delete_bot,
             commands::set_bot_token,
@@ -209,6 +209,29 @@ fn spawn_monitor(app: AppHandle) {
                         .apply_stats(&bot_id, process.cpu_usage(), memory_mb);
                 }
             }
+        }
+    });
+}
+
+/// Boucle de backup automatique : toutes les 48 h, déclenche une sauvegarde
+/// des données des clusters communautaires publics. Une nouvelle backup écrase
+/// la précédente. Les clusters privés ou non communautaires ne sont pas
+/// sauvegardés.
+fn spawn_backup(app: AppHandle) {
+    const BACKUP_INTERVAL_SECS: u64 = 48 * 60 * 60; // 48 heures
+
+    tauri::async_runtime::spawn(async move {
+        // Attente initiale de 60 s pour ne pas surcharger le boot.
+        tokio::time::sleep(Duration::from_secs(60)).await;
+        loop {
+            let (core, manager) = {
+                let state = app.state::<AppState>();
+                (state.core.clone(), state.manager.clone())
+            };
+            if let Err(error) = core.backup_community_clusters(&manager).await {
+                eprintln!("[zenode-host] backup clusters communautaires : {error}");
+            }
+            tokio::time::sleep(Duration::from_secs(BACKUP_INTERVAL_SECS)).await;
         }
     });
 }

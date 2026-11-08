@@ -10,7 +10,6 @@ import type {
   EditorAvailability,
   FileEntry,
   LogLine,
-  NewBotInput,
   PairingInfo,
   PairingPoll,
   RuntimeStatus,
@@ -33,7 +32,6 @@ export const api = {
 
   listBots: () => invoke<BotSummary[]>('list_bots'),
   getBot: (id: string) => invoke<BotSummary>('get_bot', { id }),
-  createBot: (input: NewBotInput) => invoke<BotSummary>('create_bot', { input }),
   updateBot: (id: string, patch: Record<string, unknown>) =>
     invoke<BotSummary>('update_bot', { id, patch }),
   deleteBot: (id: string) => invoke<void>('delete_bot', { id }),
@@ -69,8 +67,13 @@ export const api = {
   listClusters: () => invoke<ClusterSummary[]>('list_clusters'),
   clusterDetail: (clusterId: string) =>
     invoke<ClusterDetail>('cluster_detail', { clusterId }),
-  createCluster: (name: string, visibility: 'private' | 'public', description?: string) =>
-    invoke<{ cluster_id?: string }>('create_cluster', { name, visibility, description }),
+  createCluster: (name: string, visibility: 'private' | 'public', description?: string, hasCustomCode = false) =>
+    invoke<{ cluster_id?: string }>('create_cluster', {
+      name,
+      visibility,
+      description,
+      hasCustomCode,
+    }),
   joinCluster: (code: string) => invoke<unknown>('join_cluster', { code }),
   leaveCluster: (clusterId: string) => invoke<unknown>('leave_cluster', { clusterId }),
   createClusterInvite: (clusterId: string) =>
@@ -92,8 +95,6 @@ export const api = {
     invoke<unknown>('block_cluster_bot', { clusterId, botId, reason }),
 
   listCatalog: () => invoke<CatalogBot[]>('list_catalog'),
-  installCatalogBot: (slug: string, token: string, name?: string) =>
-    invoke<BotSummary>('install_catalog_bot', { input: { slug, token, name } }),
 
   checkUpdates: () => invoke<UpdateInfo | null>('check_updates'),
   openUrl: (url: string) => invoke<void>('open_url', { url }),

@@ -6,9 +6,9 @@ import {
   ChevronRight,
   Cpu,
   Database,
+  ExternalLink,
   MemoryStick,
   Play,
-  Plus,
   RotateCw,
   Square,
 } from 'lucide-react';
@@ -28,16 +28,11 @@ import {
   Button,
   Card,
   EmptyState,
-  Field,
   InlineError,
-  Input,
-  Modal,
   PageHeader,
   SearchInput,
   StatTile,
   StatusDot,
-  Switch,
-  Textarea,
 } from '../components/ui';
 
 export function BotsPage() {
@@ -48,8 +43,8 @@ export function BotsPage() {
   const navigate = useNavigate();
 
   const [query, setQuery] = useState('');
-  const [createOpen, setCreateOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -91,16 +86,15 @@ export function BotsPage() {
     <>
       <PageHeader
         title="Bots"
-        description="Vos bots Discord hébergés sur cette machine. Chaque bot tourne dans son propre processus, avec ses logs et son code source."
+        description="Vos bots Discord hébergés sur cette machine. La création de bots se fait sur le site web Zenode."
         actions={
           <>
             <Button
               variant="primary"
-              icon={<Plus size={14} />}
-              disabled={!runtimeInstalled}
-              onClick={() => setCreateOpen(true)}
+              icon={<ExternalLink size={14} />}
+              onClick={() => void api.openUrl('https://zenode.fr/dashboard')}
             >
-              Nouveau bot
+              Créer sur Zenode
             </Button>
           </>
         }
@@ -158,8 +152,8 @@ export function BotsPage() {
           description={
             bots.length === 0
               ? runtimeInstalled
-                ? 'Créez votre premier bot : Zenode Host génère le squelette TypeScript, gère le processus et les logs.'
-                : 'Installez d’abord le runtime Bun pour pouvoir démarrer des bots.'
+                ? 'Les bots se créent sur zenode.fr. Ils apparaissent ici dès qu’un cluster les confie à cette machine.'
+                : 'Installez d’abord le runtime Bun pour pouvoir héberger des bots.'
               : 'Aucun bot ne correspond à cette recherche.'
           }
           action={
@@ -167,10 +161,10 @@ export function BotsPage() {
               runtimeInstalled ? (
                 <Button
                   variant="primary"
-                  icon={<Plus size={14} />}
-                  onClick={() => setCreateOpen(true)}
+                  icon={<ExternalLink size={14} />}
+                  onClick={() => void api.openUrl('https://zenode.fr/dashboard')}
                 >
-                  Créer un bot
+                  Créer un bot sur Zenode
                 </Button>
               ) : (
                 <Button variant="primary" onClick={() => navigate('/onboarding')}>
@@ -187,17 +181,6 @@ export function BotsPage() {
           ))}
         </div>
       )}
-
-      <CreateBotModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={async (bot) => {
-          setCreateOpen(false);
-          toast.success(`${bot.name} créé.`);
-          await refresh();
-          navigate(`/bots/${bot.id}`);
-        }}
-      />
     </>
   );
 }
@@ -319,117 +302,6 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="text-2xs uppercase tracking-wider text-fg-subtle">{label}</p>
       <p className="mt-0.5 truncate text-xs font-medium tabular-nums text-fg">{value}</p>
     </div>
-  );
-}
-
-function CreateBotModal({
-  open,
-  onClose,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: (bot: BotSummary) => void | Promise<void>;
-}) {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [token, setToken] = useState('');
-  const [autoStart, setAutoStart] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      setName('');
-      setDescription('');
-      setToken('');
-      setAutoStart(false);
-      setError(null);
-      setSaving(false);
-    }
-  }, [open]);
-
-  const submit = async () => {
-    if (name.trim().length < 2) {
-      setError('Le nom doit contenir au moins 2 caractères.');
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      const bot = await api.createBot({
-        name: name.trim(),
-        description: description.trim(),
-        token: token.trim() || undefined,
-        auto_start: autoStart,
-      });
-      await onCreated(bot);
-    } catch (cause) {
-      setError(errorMessage(cause));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Créer un bot"
-      description="Zenode Host génère un squelette TypeScript prêt à éditer. Vous pourrez modifier le code depuis l’application ou votre éditeur."
-      footer={
-        <>
-          <Button onClick={onClose} disabled={saving}>
-            Annuler
-          </Button>
-          <Button variant="primary" loading={saving} onClick={submit} icon={<Plus size={14} />}>
-            Créer le bot
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <Field label="Nom du bot">
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Mon super bot"
-            autoFocus
-            maxLength={64}
-          />
-        </Field>
-        <Field label="Description" hint="Facultatif — visible dans les clusters publics.">
-          <Textarea
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="À quoi sert ce bot ?"
-            rows={2}
-          />
-        </Field>
-        <Field
-          label="Jeton Discord"
-          hint="Chiffré dans le coffre local, jamais écrit dans les fichiers du bot. Vous pouvez le configurer plus tard."
-        >
-          <Input
-            type="password"
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-            placeholder="Collez le jeton du bot (Bot → Token)"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </Field>
-        <div className="rounded-ctl border border-line px-3">
-          <Switch
-            checked={autoStart}
-            onChange={setAutoStart}
-            label="Démarrer avec Zenode Host"
-            description="Le bot sera lancé automatiquement à l’ouverture de l’application."
-          />
-        </div>
-        <InlineError message={error} />
-      </div>
-    </Modal>
   );
 }
 

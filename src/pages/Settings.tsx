@@ -78,6 +78,8 @@ export function SettingsPage() {
         max_concurrent_bots: clampNumber(form.max_concurrent_bots, 1, 32, 4),
         default_memory_limit_mb: clampNumber(form.default_memory_limit_mb, 128, 8192, 1024),
         heartbeat_secs: clampNumber(form.heartbeat_secs, 10, 600, 20),
+        mongo_uri: form.mongo_uri?.trim() || null,
+        mongo_db: form.mongo_db?.trim() || null,
       });
       setForm(saved);
       await reload();
@@ -194,6 +196,29 @@ export function SettingsPage() {
                   }
                 />
               </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field
+                  label="MongoDB partagé (URI)"
+                  hint="Facultatif. Une seule base pour tous les bots, isolés par botId. Le Core n’est pas installé localement."
+                >
+                  <Input
+                    value={form.mongo_uri ?? ''}
+                    onChange={(event) => patch({ mongo_uri: event.target.value })}
+                    placeholder="mongodb://…"
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                </Field>
+                <Field label="Nom de la base" hint="Défaut : znd.">
+                  <Input
+                    value={form.mongo_db ?? ''}
+                    onChange={(event) => patch({ mongo_db: event.target.value })}
+                    placeholder="znd"
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                </Field>
+              </div>
               <InlineError message={error} />
               <div className="flex justify-end">
                 <Button variant="primary" loading={saving} onClick={save}>

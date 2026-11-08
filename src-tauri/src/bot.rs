@@ -237,6 +237,35 @@ impl BotManager {
         self.vault.get(&token_key(id)).is_some()
     }
 
+    /// Dossier du code exécuté par un bot.
+    ///
+    /// - cluster classique → `<data>/worker` (code unique partagé) ;
+    /// - cluster à code modifié → `<data>/cluster-code/<cluster_id>` ;
+    /// - bot local historique (code déjà présent dans son dossier) → son dossier.
+    fn code_dir(&self, record: &BotRecord) -> AppResult<PathBuf> {
+        if record.has_custom_code {
+            if let Some(cluster_id) = record.cluster_id.as_deref() {
+                return self.paths.cluster_code_dir(cluster_id);
+            }
+        }
+        if record.cluster_id.is_none() {
+            let legacy = self.paths.bot_dir(&record.id)?;
+            if legacy.join("src/index.ts").exists() {
+                return Ok(legacy);
+            }
+        }
+        Ok(self.paths.worker_code_dir())
+    }
+
+    fn canonical_code_dir(&self, id: &str) -> AppResult<PathBuf> {
+        let record = self.record(id)?;
+        let dir = self.code_dir(&record)?;
+        if !dir.exists() {
+            template::ensure_worker_code(&dir)?;
+        }
+        dir.canonicalize().map_err(AppError::Io)
+    }
+
     pub fn create(&self, input: CreateBotInput) -> AppResult<BotSummary> {
         let name = input.name.trim().to_string();
         if name.len() < 2 || name.len() > 64 {
@@ -245,7 +274,20 @@ impl BotManager {
         let mut state = self.state.write();
         let id = unique_id(&name, &state.bots);
         let dir = self.paths.bot_dir(&id)?;
-        template::ensure_template(&dir, &name)?;
+        // Un seul code partagé : le bot local pointe vers le worker classique.
+        template::ensure_worker_code(&self.paths.worker_code_dir())?;
+        template::write_bot_config(
+            &dir,
+            &template::BotConfig {
+                schema: 2,
+                bot_id: &id,
+                name: &name,
+                cluster_id: None,
+                cluster_name: None,
+                code_variant: "classic",
+                entry: "src/index.ts",
+            },
+        )?;
         let now = now_iso();
         let record = BotRecord {
             id: id.clone(),
@@ -265,6 +307,8 @@ impl BotManager {
             updated_at: now,
             owner: None,
             public_slug: None,
+            has_custom_code: false,
+            source_url: None,
         };
         if let Some(token) = input
             .token
@@ -497,15 +541,14 @@ impl BotManager {
 
         let dir = self.paths.bot_dir(&record.id)?;
         std::fs::create_dir_all(&dir)?;
-        if !dir.join("zenode.bot.json").exists() {
-            template::ensure_template(&dir, &record.name)?;
-        }
+        let code_dir = self.code_dir(&record)?;
+        template::ensure_worker_code(&code_dir)?;
         let entry = if record.entry.is_empty() {
             "src/index.ts".to_string()
         } else {
             record.entry.clone()
         };
-        if !dir.join(&entry).exists() {
+        if !code_dir.join(&entry).exists() {
             return Err(err(format!(
                 "Fichier d'entrée introuvable : {entry}. Corrigez le manifeste du bot."
             )));
@@ -526,9 +569,9 @@ impl BotManager {
         }
         self.emit_status(id, &slot);
 
-        if dir.join("package.json").exists() && !dir.join("node_modules").exists() {
+        if code_dir.join("package.json").exists() && !code_dir.join("node_modules").exists() {
             self.append_log(id, &slot, "system", "Installation des dépendances…".into());
-            if let Err(error) = self.run_install(id, &slot, &dir, &runtime_bin).await {
+            if let Err(error) = self.run_install(id, &slot, &code_dir, &runtime_bin).await {
                 slot.info.write().status = BotStatus::Error;
                 slot.info.write().last_error = Some(error.to_string());
                 self.append_log(
@@ -551,8 +594,8 @@ impl BotManager {
 
         let mut cmd = Command::new(&runtime_bin);
         cmd.arg("run").arg(&entry);
-        cmd.current_dir(&dir);
-        self.configure_env(&mut cmd, &record, &token);
+        cmd.current_dir(&code_dir);
+        self.configure_env(&mut cmd, &record, &token, &dir);
         cmd.stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -594,7 +637,7 @@ impl BotManager {
         Ok(self.summary(&self.record(id)?))
     }
 
-    fn configure_env(&self, cmd: &mut Command, record: &BotRecord, token: &str) {
+    fn configure_env(&self, cmd: &mut Command, record: &BotRecord, token: &str, bot_dir: &Path) {
         cmd.env_clear();
         let path = if cfg!(windows) {
             std::env::var("PATH")
@@ -632,6 +675,37 @@ impl BotManager {
         cmd.env("ZENODE_CORE_URL", &self.settings().core_url);
         cmd.env("ZENODE_RUNTIME_VERSION", crate::runtime::BUN_VERSION);
         cmd.env("BUN_INSTALL_CACHE_DIR", &self.paths.cache_dir);
+        // État et configuration propres au bot, séparés du code partagé.
+        cmd.env("ZENODE_BOT_DIR", bot_dir);
+        cmd.env("ZENODE_CONFIG", bot_dir.join("zenode.bot.json"));
+        cmd.env(
+            "ZENODE_CODE_VARIANT",
+            if record.has_custom_code {
+                "custom"
+            } else {
+                "classic"
+            },
+        );
+        if let Some(cluster_id) = record.cluster_id.as_deref() {
+            cmd.env("ZENODE_CLUSTER_ID", cluster_id);
+        }
+        let settings = self.settings();
+        if let Some(uri) = settings
+            .mongo_uri
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+        {
+            cmd.env("MONGODB_URI", uri);
+        }
+        if let Some(db) = settings
+            .mongo_db
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+        {
+            cmd.env("MONGODB_DB", db);
+        }
         // Le jeton n'existe que dans l'environnement du processus enfant.
         cmd.env("DISCORD_TOKEN", token);
         cmd.env("BOT_TOKEN", token);
@@ -975,7 +1049,7 @@ impl BotManager {
     }
 
     pub fn files(&self, id: &str) -> AppResult<Vec<FileEntry>> {
-        let dir = canonical_bot_dir(&self.paths, id)?;
+        let dir = self.canonical_code_dir(id)?;
         let mut entries = Vec::new();
         let walker = ignore::WalkBuilder::new(&dir)
             .hidden(false)
@@ -1020,7 +1094,7 @@ impl BotManager {
     }
 
     pub fn read_file(&self, id: &str, relative: &str) -> AppResult<String> {
-        let path = safe_join(&canonical_bot_dir(&self.paths, id)?, relative)?;
+        let path = safe_join(&self.canonical_code_dir(id)?, relative)?;
         let meta = std::fs::metadata(&path)?;
         if !meta.is_file() {
             return Err(err("Ce chemin n'est pas un fichier."));
@@ -1035,7 +1109,7 @@ impl BotManager {
         if contents.len() as u64 > MAX_FILE_BYTES {
             return Err(err("Fichier trop volumineux (max 2 Mo)."));
         }
-        let root = canonical_bot_dir(&self.paths, id)?;
+        let root = self.canonical_code_dir(id)?;
         let path = safe_join(&root, relative)?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -1052,12 +1126,12 @@ impl BotManager {
     }
 
     pub fn open_folder(&self, id: &str) -> AppResult<()> {
-        let dir = canonical_bot_dir(&self.paths, id)?;
+        let dir = self.canonical_code_dir(id)?;
         open_path(&dir.to_string_lossy())
     }
 
     pub fn open_editor(&self, id: &str, editor: &str) -> AppResult<()> {
-        let dir = canonical_bot_dir(&self.paths, id)?;
+        let dir = self.canonical_code_dir(id)?;
         let cli = match editor {
             "code" => "code",
             "cursor" => "cursor",
@@ -1117,31 +1191,53 @@ impl BotManager {
             None => sanitize_id(&assignment.bot_id),
         };
         let dir = self.paths.bot_dir(&local_id)?;
-        let is_new = !dir.join("zenode.bot.json").exists();
-        if is_new {
-            std::fs::create_dir_all(&dir)?;
-            if let Some(url) = assignment.source_url.as_deref() {
-                if let Err(error) = self.download_source(&dir, url).await {
-                    self.append_log(
-                        &local_id,
-                        &self.slot(&local_id),
-                        "stderr",
-                        format!("Téléchargement du code source impossible : {error}. Utilisation du modèle local."),
-                    );
+        std::fs::create_dir_all(&dir)?;
+        let code_dir = match (assignment.has_custom_code, assignment.cluster_id.as_deref()) {
+            (true, Some(cluster_id)) => self.paths.cluster_code_dir(cluster_id)?,
+            _ => self.paths.worker_code_dir(),
+        };
+        let custom_code = matches!(
+            (assignment.has_custom_code, assignment.cluster_id.as_deref()),
+            (true, Some(_))
+        );
+        // Le code personnalisé d'un cluster est isolé ; le code classique est
+        // partagé par tous les bots.
+        if custom_code {
+            std::fs::create_dir_all(&code_dir)?;
+            if !code_dir.join("src/index.ts").exists() {
+                if let Some(url) = assignment.source_url.as_deref() {
+                    if let Err(error) = self.download_source(&code_dir, url).await {
+                        self.append_log(
+                            &local_id,
+                            &self.slot(&local_id),
+                            "stderr",
+                            format!("Téléchargement du code source impossible : {error}. Utilisation du modèle local."),
+                        );
+                    }
                 }
             }
-            if !dir.join("zenode.bot.json").exists() {
-                template::ensure_template(&dir, &assignment.name)?;
-            }
         }
-
-        self.vault.set(&token_key(&local_id), token)?;
-        let now = now_iso();
+        template::ensure_worker_code(&code_dir)?;
         let entry = assignment
             .entry
             .clone()
             .filter(|e| !e.trim().is_empty())
             .unwrap_or_else(|| "src/index.ts".to_string());
+        template::write_bot_config(
+            &dir,
+            &template::BotConfig {
+                schema: 2,
+                bot_id: &local_id,
+                name: &assignment.name,
+                cluster_id: assignment.cluster_id.as_deref(),
+                cluster_name: assignment.cluster_name.as_deref(),
+                code_variant: if custom_code { "custom" } else { "classic" },
+                entry: &entry,
+            },
+        )?;
+
+        self.vault.set(&token_key(&local_id), token)?;
+        let now = now_iso();
         let default_memory_limit_mb = self.state.read().settings.default_memory_limit_mb;
         {
             let mut state = self.state.write();
@@ -1161,6 +1257,8 @@ impl BotManager {
                 record.auto_start = true;
                 record.memory_limit_mb = assignment.memory_limit_mb.or(record.memory_limit_mb);
                 record.version = assignment.version.clone();
+                record.has_custom_code = assignment.has_custom_code;
+                record.source_url = assignment.source_url.clone();
                 record.updated_at = now.clone();
             } else {
                 state.bots.push(BotRecord {
@@ -1189,6 +1287,8 @@ impl BotManager {
                     updated_at: now,
                     owner: assignment.owner.clone(),
                     public_slug: assignment.public_slug.clone(),
+                    has_custom_code: assignment.has_custom_code,
+                    source_url: assignment.source_url.clone(),
                 });
             }
             save_state(&self.paths.state_file, &state)?;
@@ -1407,14 +1507,6 @@ fn sanitize_id(value: &str) -> String {
     } else {
         trimmed
     }
-}
-
-fn canonical_bot_dir(paths: &AppPaths, id: &str) -> AppResult<PathBuf> {
-    let dir = paths.bot_dir(id)?;
-    if !dir.exists() {
-        return Err(err("Ce bot n'a pas de dossier local."));
-    }
-    dir.canonicalize().map_err(AppError::Io)
 }
 
 fn safe_join(root: &Path, relative: &str) -> AppResult<PathBuf> {

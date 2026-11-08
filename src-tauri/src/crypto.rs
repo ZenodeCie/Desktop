@@ -92,4 +92,16 @@ mod tests {
         let (secret, _) = generate_keypair();
         assert!(open_sealed(&secret, "AAAA").is_err());
     }
+
+    /// Vecteur généré par le Core (Node) : garantit que le format scellé
+    /// `ephemeral_public || nonce || ciphertext` reste compatible.
+    #[test]
+    fn opens_node_sealed_vector() {
+        let secret = open_sealed(
+            "ERERERERERERERERERERERERERERERERERERERERERE=",
+            "D6poTtKIZ7l/Smot7l34zpdOdrcBjj8iocTPJnhXDyAAAQIDBAUGBwgJCgsWLGPViLalsrmeLgOtLwwsXfPRB2qSoCezCh+lEJpBcjDG3lNU",
+        )
+        .unwrap();
+        assert_eq!(secret, "test-secret-token-123");
+    }
 }

@@ -29,6 +29,8 @@ export interface BotRecord {
   updated_at: string;
   owner: string | null;
   public_slug: string | null;
+  has_custom_code: boolean;
+  source_url: string | null;
 }
 
 export interface BotRuntimeInfo {
@@ -77,6 +79,8 @@ export interface Settings {
   max_concurrent_bots: number;
   default_memory_limit_mb: number;
   heartbeat_secs: number;
+  mongo_uri: string | null;
+  mongo_db: string | null;
 }
 
 export interface CoreUser {
@@ -155,6 +159,12 @@ export interface ClusterSummary {
   online_bots: number;
   health: string;
   created_at: string;
+  /** Cluster hébergé par un particulier (pas Zenode). */
+  is_community: boolean;
+  /** Le code du worker a été modifié par rapport au template standard. */
+  has_custom_code: boolean;
+  /** Backup automatique activée (uniquement pour clusters communautaires publics). */
+  backup_enabled: boolean;
 }
 
 export interface HostSummary {
@@ -210,6 +220,11 @@ export interface CatalogBot {
   installs: number;
   source_url: string | null;
   verified: boolean;
+  cluster_id?: string | null;
+  cluster_name?: string | null;
+  cluster_slug?: string | null;
+  is_community?: boolean;
+  has_custom_code?: boolean;
 }
 
 export interface UpdateInfo {
@@ -233,11 +248,4 @@ export interface LocalStats {
   bots: BotSummary[];
   host: HostIdentity | null;
   runtime_version: string;
-}
-
-export interface NewBotInput {
-  name: string;
-  description?: string;
-  token?: string;
-  auto_start?: boolean;
 }

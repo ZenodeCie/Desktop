@@ -53,6 +53,12 @@ pub struct BotRecord {
     pub owner: Option<String>,
     #[serde(default)]
     pub public_slug: Option<String>,
+    /// Le cluster utilise un code de bot modifié (fork), séparé du code officiel.
+    #[serde(default)]
+    pub has_custom_code: bool,
+    /// URL de l'archive du code personnalisé, si applicable.
+    #[serde(default)]
+    pub source_url: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -123,6 +129,11 @@ pub struct Settings {
     pub default_memory_limit_mb: u64,
     #[serde(default)]
     pub heartbeat_secs: u64,
+    /// Base MongoDB partagée par tous les bots (optionnelle).
+    #[serde(default)]
+    pub mongo_uri: Option<String>,
+    #[serde(default)]
+    pub mongo_db: Option<String>,
 }
 
 fn default_core_url() -> String {
@@ -146,6 +157,8 @@ impl Default for Settings {
             max_concurrent_bots: default_max_bots(),
             default_memory_limit_mb: default_memory(),
             heartbeat_secs: 20,
+            mongo_uri: None,
+            mongo_db: None,
         }
     }
 }
@@ -227,6 +240,15 @@ pub struct ClusterSummary {
     pub online_bots: u32,
     pub health: String,
     pub created_at: String,
+    /// Cluster hébergé par un particulier (pas Zenode).
+    #[serde(default)]
+    pub is_community: bool,
+    /// Le code du worker a été modifié par rapport au template standard.
+    #[serde(default)]
+    pub has_custom_code: bool,
+    /// Backup automatique activée (uniquement clusters communautaires publics).
+    #[serde(default)]
+    pub backup_enabled: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -305,6 +327,9 @@ pub struct Assignment {
     pub entry: Option<String>,
     pub sealed_token: String,
     pub version: Option<String>,
+    /// Indique que le cluster utilise un code modifié (fork).
+    #[serde(default)]
+    pub has_custom_code: bool,
     #[serde(default)]
     pub memory_limit_mb: Option<u64>,
 }

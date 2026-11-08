@@ -448,6 +448,7 @@ impl CoreClient {
         name: &str,
         visibility: &str,
         description: &str,
+        has_custom_code: bool,
     ) -> AppResult<Value> {
         self.authorized(
             reqwest::Method::POST,
@@ -456,6 +457,7 @@ impl CoreClient {
                 "name": name,
                 "visibility": visibility,
                 "description": description,
+                "has_custom_code": has_custom_code,
             })),
         )
         .await
@@ -612,6 +614,51 @@ impl CoreClient {
         ] {
             let _ = self.vault.remove(key);
         }
+    }
+
+    /// Déclenche une backup des données des clusters communautaires publics
+    /// auprès du Core. La nouvelle backup écrase la précédente. Les clusters
+    /// privés ou non communautaires ne sont pas concernés.
+    pub async fn backup_community_clusters(&self, manager: &Arc<BotManager>) -> AppResult<()> {
+        if !self.is_authenticated() {
+            return Ok(());
+        }
+        let host = match manager.host_identity() {
+            Some(host) => host,
+            None => return Ok(()),
+        };
+        // Récupère la liste des clusters pour trouver ceux qui sont
+        // communautaires et publics.
+        let clusters = self.list_clusters().await.unwrap_or_default();
+        for cluster in &clusters {
+            if cluster.is_community && cluster.visibility == "public" {
+                match self
+                    .authorized(
+                        reqwest::Method::POST,
+                        &format!("/api/desktop/v1/clusters/{}/backup", cluster.cluster_id),
+                        Some(serde_json::json!({
+                            "host_id": host.host_id,
+                            "overwrite": true,
+                        })),
+                    )
+                    .await
+                {
+                    Ok(_) => {
+                        eprintln!(
+                            "[zenode-host] backup cluster {} ({}) OK",
+                            cluster.name, cluster.cluster_id
+                        );
+                    }
+                    Err(error) => {
+                        eprintln!(
+                            "[zenode-host] backup cluster {} échouée : {error}",
+                            cluster.name
+                        );
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     pub async fn sync(&self, manager: &Arc<BotManager>) -> AppResult<Option<HeartbeatResult>> {

@@ -3,8 +3,9 @@ use std::path::Path;
 use crate::error::AppResult;
 use crate::vault::atomic_write;
 
-const MANIFEST: &str = r#"{
-  "schema": 1,
+const WORKER_MANIFEST: &str = r#"{
+  "schema": 2,
+  "kind": "shared-worker",
   "runtime": "bun",
   "entry": "src/index.ts",
   "min_runtime": "1.1.0"
@@ -19,7 +20,9 @@ const PACKAGE_JSON: &str = r#"{
     "start": "bun run src/index.ts"
   },
   "dependencies": {
-    "discord.js": "^14.27.0"
+    "discord.js": "^14.27.0",
+    "mongoose": "^9.9.1",
+    "dotenv": "^17.4.2"
   }
 }
 "#;
@@ -39,16 +42,29 @@ const TSCONFIG: &str = r#"{
 
 const GITIGNORE: &str = "node_modules/\nruntime.json\n*.log\n.env\n";
 
-const README: &str = r#"# Bot Zenode
+const README: &str = r#"# Zenode Worker
 
-Ce dossier contient le code source de votre bot. Il est exécuté par
-**Zenode Host** avec le runtime Bun épinglé fourni par l'application.
+Ce dossier contient **le code partagé** exécuté par **Zenode Host** avec le
+runtime Bun épinglé fourni par l'application.
 
-## Structure
+## Un seul code, une seule base
 
-- `src/index.ts` — point d'entrée du bot (modifiable)
-- `zenode.bot.json` — manifeste lu par Zenode Host (ne pas supprimer)
-- `runtime.json` — état publié par le bot (généré, ne pas éditer)
+- Tous les clusters classiques utilisent ce même code.
+- Les clusters à code modifié disposent de leur propre fork dans
+  `cluster-code/<cluster_id>`.
+- Chaque bot possède sa configuration dans `bots/<bot_id>/zenode.bot.json`
+  et son état (`runtime.json`) dans `bots/<bot_id>`.
+- Tous les bots partagent **une seule base MongoDB**. Les documents sont
+  isolés par le champ `botId`. La connexion est configurée via les
+  variables d'environnement `MONGODB_URI` et `MONGODB_DB`.
+
+## Architecture (Core en API)
+
+Ce worker reçoit ses ordres du Core Zenode via API. Le Core n'est pas
+installé localement — il tourne sur l'infrastructure Zenode.
+
+- `src/index.ts` — point d'entrée du worker (modifiable)
+- `zenode.worker.json` — manifeste lu par Zenode Host (ne pas supprimer)
 
 ## Commandes
 
@@ -59,10 +75,15 @@ bun run src/index.ts
 
 Le jeton Discord n'est **jamais** écrit dans ce dossier : Zenode Host le
 fournit au processus via la variable d'environnement `DISCORD_TOKEN`.
+
+La création de bots se fait sur le site web Zenode (Core).
 "#;
 
 const INDEX_TS: &str = r#"import { Client, Events, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js'
 import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+
+// ---------- Configuration ----------
 
 const token = process.env.DISCORD_TOKEN
 if (!token) {
@@ -73,7 +94,29 @@ if (!token) {
 const botId = process.env.ZENODE_BOT_ID ?? 'local'
 const botName = process.env.BOT_NAME ?? 'Zenode Bot'
 const hostId = process.env.ZENODE_HOST_ID ?? 'local'
+// Le code est partagé entre plusieurs bots : l'état propre à chaque bot
+// (runtime.json, config) vit dans ZENODE_BOT_DIR, jamais dans le code.
+const botDir = process.env.ZENODE_BOT_DIR ?? process.cwd()
 const startedAt = Date.now()
+
+// ---------- MongoDB (base partagée, isolation par botId) ----------
+
+let db: typeof import('mongoose') | null = null
+const mongoUri = process.env.MONGODB_URI
+const mongoDb = process.env.MONGODB_DB ?? 'znd'
+
+if (mongoUri) {
+  try {
+    const mongoose = await import('mongoose')
+    await mongoose.default.connect(mongoUri, { dbName: mongoDb })
+    db = mongoose.default
+    console.log(`[bot] MongoDB connecté (base ${mongoDb}, botId=${botId})`)
+  } catch (error) {
+    console.warn('[bot] MongoDB non disponible:', (error as Error).message)
+  }
+}
+
+// ---------- Client Discord ----------
 
 const client = new Client({
   intents: [
@@ -96,7 +139,7 @@ async function publishRuntime(extra: Record<string, unknown> = {}) {
     ...extra,
   }
   try {
-    await writeFile('runtime.json', JSON.stringify(payload), { mode: 0o600 })
+    await writeFile(join(botDir, 'runtime.json'), JSON.stringify(payload), { mode: 0o600 })
   } catch (error) {
     console.warn('[bot] runtime.json non écrit:', (error as Error).message)
   }
@@ -142,29 +185,79 @@ async function shutdown(signal: string) {
   console.log(`[bot] arrêt (${signal})`)
   clearInterval(heartbeat)
   await publishRuntime({ discord_ready: false, stopping: true }).catch(() => undefined)
+  if (db) {
+    await db.disconnect().catch(() => undefined)
+  }
   await client.destroy().catch(() => undefined)
   process.exit(0)
 }
 
 process.on('SIGTERM', () => void shutdown('SIGTERM'))
 process.on('SIGINT', () => void shutdown('SIGINT'))
-process.on('unhandledRejection', (reason) => console.error('[bot] promesse rejetée:', reason))
 
-console.log(`[bot] démarrage de ${botName} (${botId})`)
-await client.login(token)
+client.login(token).catch((error) => {
+  const text = error instanceof Error ? error.message : String(error)
+  if (/disallowed intents|privileged/i.test(text)) {
+    console.error(`Privileged Intents error: ${text}. Activez Message Content, Server Members et Presence dans le portail Discord.`)
+  } else if (/invalid token|unauthorized/i.test(text)) {
+    console.error(`Invalid Discord token (unauthorized): ${text}`)
+  } else {
+    console.error(`[bot] échec de connexion: ${text}`)
+  }
+  process.exit(1)
+})
 "#;
 
-/// Écrit le squelette d'un bot s'il n'existe pas encore. Ne remplace jamais un
-/// fichier existant : l'utilisateur peut éditer son code sans risque.
-pub fn ensure_template(dir: &Path, name: &str) -> AppResult<()> {
+const ENV_EXAMPLE: &str = r#"# ---------- Zenode Bot — Variables d'environnement ----------
+# Ce fichier est un modèle. Le jeton Discord est fourni par Zenode Host
+# via DISCORD_TOKEN — ne le mettez pas ici.
+
+# Base de données MongoDB partagée entre tous les bots.
+# Les documents sont isolés par le champ botId.
+# MONGODB_URI=mongodb://localhost:27017/bot-v2
+# MONGODB_DB=znd
+
+# Préfixe des commandes texte (défaut : !)
+# PREFIX=!
+
+# La création de bots se fait sur le site web Zenode (Core).
+"#;
+
+/// Configuration d'un bot. Le code reste partagé : ce fichier vit dans le
+/// dossier du bot et ne contient jamais de secret.
+#[derive(Debug, serde::Serialize)]
+pub struct BotConfig<'a> {
+    pub schema: u32,
+    pub bot_id: &'a str,
+    pub name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cluster_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cluster_name: Option<&'a str>,
+    pub code_variant: &'a str,
+    pub entry: &'a str,
+}
+
+/// Installe le code partagé (worker classique) dans `dir` sans écraser une
+/// modification existante. Cette fonction est idempotente.
+pub fn ensure_worker_code(dir: &Path) -> AppResult<()> {
     std::fs::create_dir_all(dir.join("src"))?;
-    write_if_missing(&dir.join("zenode.bot.json"), MANIFEST.as_bytes())?;
+    write_if_missing(&dir.join("zenode.worker.json"), WORKER_MANIFEST.as_bytes())?;
     write_if_missing(&dir.join("package.json"), PACKAGE_JSON.as_bytes())?;
     write_if_missing(&dir.join("tsconfig.json"), TSCONFIG.as_bytes())?;
     write_if_missing(&dir.join(".gitignore"), GITIGNORE.as_bytes())?;
-    let readme = README.replace("Bot Zenode", name);
-    write_if_missing(&dir.join("README.md"), readme.as_bytes())?;
+    write_if_missing(&dir.join("README.md"), README.as_bytes())?;
     write_if_missing(&dir.join("src/index.ts"), INDEX_TS.as_bytes())?;
+    write_if_missing(&dir.join(".env.example"), ENV_EXAMPLE.as_bytes())?;
+    Ok(())
+}
+
+/// Écrit la configuration d'un bot dans son dossier.
+pub fn write_bot_config(dir: &Path, config: &BotConfig<'_>) -> AppResult<()> {
+    std::fs::create_dir_all(dir)?;
+    let payload = serde_json::to_vec_pretty(config)
+        .map_err(|_| crate::error::err("Configuration de bot invalide."))?;
+    atomic_write(&dir.join("zenode.bot.json"), &payload, false)?;
     Ok(())
 }
 

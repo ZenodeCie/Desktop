@@ -1,26 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   BadgeCheck,
-  Download,
+  ExternalLink,
   Package,
   RefreshCw,
   Store,
 } from 'lucide-react';
 
 import { api, errorMessage } from '../lib/api';
-import { useApp, useToast } from '../lib/store';
+import { useApp } from '../lib/store';
 import type { CatalogBot } from '../lib/types';
 import {
   Badge,
   Button,
   Card,
   EmptyState,
-  Field,
   InlineError,
-  InlineNote,
-  Input,
-  Modal,
   PageHeader,
   SearchInput,
   Spinner,
@@ -28,14 +24,12 @@ import {
 
 export function CatalogPage() {
   const { authenticated } = useApp();
-  const toast = useToast();
-  const navigate = useNavigate();
   const [items, setItems] = useState<CatalogBot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
-  const [install, setInstall] = useState<CatalogBot | null>(null);
+  const [variant, setVariant] = useState<'all' | 'classic' | 'custom'>('all');
 
   const load = useCallback(async () => {
     if (!authenticated) {
@@ -68,6 +62,8 @@ export function CatalogPage() {
     const needle = query.trim().toLowerCase();
     return items.filter((item) => {
       if (category !== 'all' && item.category !== category) return false;
+      if (variant === 'custom' && !item.has_custom_code) return false;
+      if (variant === 'classic' && item.has_custom_code) return false;
       if (!needle) return true;
       return (
         item.name.toLowerCase().includes(needle) ||
@@ -76,20 +72,20 @@ export function CatalogPage() {
         item.author.toLowerCase().includes(needle)
       );
     });
-  }, [items, query, category]);
+  }, [items, query, category, variant]);
 
   return (
     <>
       <PageHeader
         title="Catalogue"
-        description="Des bots prêts à héberger, publiés par la communauté Zenode. L’installation crée un bot local que vous pouvez modifier."
+        description="Bots publics publiés sur zenode.fr. Les clusters à code modifié sont séparés des clusters classiques ; l’installation se fait sur le site Zenode."
       />
 
       {!authenticated ? (
         <EmptyState
           icon={<Store size={20} />}
           title="Liez votre compte pour accéder au catalogue"
-          description="Le catalogue est synchronisé avec le Core et nécessite une session. L’installation reste locale : le code est téléchargé dans le dossier de vos bots."
+          description="Le catalogue est synchronisé avec le Core. La création et l’installation des bots se font sur zenode.fr."
           action={
             <Link
               to="/onboarding"
@@ -112,14 +108,15 @@ export function CatalogPage() {
         <EmptyState
           icon={<Package size={20} />}
           title="Catalogue vide"
-          description="Aucun bot n’est encore publié. Vous pouvez créer un bot local depuis l’onglet Bots et le déployer sur un cluster."
+          description="Aucun bot n’est encore publié. Créez et publiez vos bots depuis le site Zenode."
           action={
-            <Link
-              to="/"
-              className="inline-flex h-8 items-center gap-1.5 rounded-ctl border border-line bg-surface px-3 text-sm font-medium text-fg hover:bg-sunken"
+            <Button
+              variant="primary"
+              icon={<ExternalLink size={13} />}
+              onClick={() => void api.openUrl('https://zenode.fr/dashboard')}
             >
-              Créer un bot local
-            </Link>
+              Ouvrir Zenode
+            </Button>
           }
         />
       ) : (
@@ -146,6 +143,27 @@ export function CatalogPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="mb-4 flex flex-wrap gap-1">
+            {(['all', 'classic', 'custom'] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setVariant(value)}
+                className={`rounded-full border px-2.5 py-1 text-2xs font-medium transition-colors ${
+                  variant === value
+                    ? 'border-accent bg-accent-soft text-accent-soft-fg'
+                    : 'border-line text-fg-muted hover:border-line-strong hover:text-fg'
+                }`}
+              >
+                {value === 'all'
+                  ? 'Tous les codes'
+                  : value === 'classic'
+                    ? 'Classiques'
+                    : 'Code modifié'}
+              </button>
+            ))}
           </div>
 
           {filtered.length === 0 ? (
@@ -187,14 +205,18 @@ export function CatalogPage() {
                       <span>v{item.version}</span>
                       <span>·</span>
                       <span className="tabular-nums">{item.installs} installation{item.installs > 1 ? 's' : ''}</span>
+                      {item.is_community ? <Badge tone="warn">Particulier</Badge> : null}
+                      {item.has_custom_code ? <Badge tone="accent">Code modifié</Badge> : null}
                     </div>
                     <Button
                       size="sm"
                       variant="primary"
-                      icon={<Download size={12} />}
-                      onClick={() => setInstall(item)}
+                      icon={<ExternalLink size={12} />}
+                      onClick={() =>
+                        void api.openUrl(`https://zenode.fr/catalog/${encodeURIComponent(item.slug)}`)
+                      }
                     >
-                      Installer
+                      Voir sur Zenode
                     </Button>
                   </div>
                 </Card>
@@ -203,114 +225,7 @@ export function CatalogPage() {
           )}
         </>
       )}
-
-      <InstallModal
-        item={install}
-        onClose={() => setInstall(null)}
-        onInstalled={async (botId) => {
-          setInstall(null);
-          toast.success('Bot installé depuis le catalogue.');
-          navigate(`/bots/${botId}`);
-        }}
-      />
     </>
   );
 }
 
-function InstallModal({
-  item,
-  onClose,
-  onInstalled,
-}: {
-  item: CatalogBot | null;
-  onClose: () => void;
-  onInstalled: (botId: string) => void | Promise<void>;
-}) {
-  const [token, setToken] = useState('');
-  const [name, setName] = useState('');
-  const [installing, setInstalling] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!item) {
-      setToken('');
-      setName('');
-      setError(null);
-      setInstalling(false);
-    } else {
-      setName(item.name);
-    }
-  }, [item]);
-
-  return (
-    <Modal
-      open={Boolean(item)}
-      onClose={onClose}
-      title={item ? `Installer ${item.name}` : 'Installer'}
-      description="Le code source est téléchargé et vérifié dans le dossier de vos bots. Vous pourrez l’éditer ensuite."
-      footer={
-        <>
-          <Button onClick={onClose} disabled={installing}>
-            Annuler
-          </Button>
-          <Button
-            variant="primary"
-            icon={<Download size={13} />}
-            loading={installing}
-            disabled={token.trim().length < 50}
-            onClick={async () => {
-              if (!item) return;
-              setInstalling(true);
-              setError(null);
-              try {
-                const bot = await api.installCatalogBot(
-                  item.slug,
-                  token.trim(),
-                  name.trim() || undefined,
-                );
-                await onInstalled(bot.id);
-              } catch (cause) {
-                setError(errorMessage(cause));
-              } finally {
-                setInstalling(false);
-              }
-            }}
-          >
-            Installer
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <Field label="Nom local" hint="Vous pourrez le renommer plus tard.">
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            maxLength={64}
-          />
-        </Field>
-        <Field
-          label="Jeton Discord"
-          hint="Chiffré dans le coffre local. Le catalogue ne reçoit jamais ce jeton."
-        >
-          <Input
-            type="password"
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-            placeholder="Coller le jeton du bot"
-            autoComplete="off"
-            spellCheck={false}
-            autoFocus
-          />
-        </Field>
-        {item && !item.source_url ? (
-          <InlineNote>
-            Ce bot n’a pas d’archive source publiée : un squelette TypeScript standard
-            sera créé, à vous de l’adapter.
-          </InlineNote>
-        ) : null}
-        <InlineError message={error} />
-      </div>
-    </Modal>
-  );
-}

@@ -66,8 +66,8 @@ export function ClustersPage() {
   return (
     <>
       <PageHeader
-        title="Clusters"
-        description="Un cluster relie plusieurs machines et membres pour héberger des bots ensemble. Les clusters privés s’invitent par code ; les clusters publics sont modérés."
+        title="VM Workers"
+        description="Un VM Worker est un cluster qui relie plusieurs machines et membres pour héberger des bots. Les clusters privés s’invitent par code ; les clusters publics apparaissent sur zenode.fr avec un avertissement s’ils appartiennent à un particulier."
         actions={
           authenticated ? (
             <>
@@ -79,7 +79,7 @@ export function ClustersPage() {
                 icon={<Plus size={14} />}
                 onClick={() => setCreateOpen(true)}
               >
-                Créer un cluster
+                Créer un VM Worker
               </Button>
             </>
           ) : null
@@ -112,12 +112,12 @@ export function ClustersPage() {
       ) : clusters.length === 0 ? (
         <EmptyState
           icon={<Boxes size={20} />}
-          title="Aucun cluster"
-          description="Créez un cluster privé pour vos propres machines, ou rejoignez un cluster avec un code d’invitation."
+          title="Aucun VM Worker"
+          description="Créez un VM Worker privé pour vos propres machines, ou rejoignez-en un avec un code d’invitation. Les bots se créent ensuite sur zenode.fr."
           action={
             <div className="flex gap-2">
               <Button variant="primary" icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>
-                Créer un cluster
+                Créer un VM Worker
               </Button>
               <Button icon={<UserPlus size={14} />} onClick={() => setJoinOpen(true)}>
                 Rejoindre
@@ -145,11 +145,14 @@ export function ClustersPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                   <Badge tone={cluster.visibility === 'public' ? 'info' : 'outline'}>
                     {cluster.visibility === 'public' ? 'Public' : 'Privé'}
                   </Badge>
                   <Badge tone="neutral">{cluster.role}</Badge>
+                  {cluster.is_community ? <Badge tone="warn">Communauté</Badge> : null}
+                  {cluster.has_custom_code ? <Badge tone="accent">Code modifié</Badge> : null}
+                  {cluster.backup_enabled ? <Badge tone="success">Backup 48 h</Badge> : null}
                   <ChevronRight
                     size={14}
                     className="text-fg-subtle transition-transform group-hover:translate-x-0.5"
@@ -222,6 +225,7 @@ function CreateClusterModal({
 }) {
   const [name, setName] = useState('');
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
+  const [customCode, setCustomCode] = useState(false);
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -230,6 +234,7 @@ function CreateClusterModal({
     if (!open) {
       setName('');
       setVisibility('private');
+      setCustomCode(false);
       setDescription('');
       setError(null);
       setSaving(false);
@@ -240,8 +245,8 @@ function CreateClusterModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Créer un cluster"
-      description="Vous en devenez propriétaire : invitations, affectations et modération."
+      title="Créer un VM Worker"
+      description="Vous en devenez propriétaire : invitations, affectations et modération. Les bots se créent sur le site Zenode."
       footer={
         <>
           <Button onClick={onClose} disabled={saving}>
@@ -256,7 +261,7 @@ function CreateClusterModal({
               setSaving(true);
               setError(null);
               try {
-                await api.createCluster(name.trim(), visibility, description.trim());
+                await api.createCluster(name.trim(), visibility, description.trim(), customCode);
                 await onCreated();
               } catch (cause) {
                 setError(errorMessage(cause));
@@ -271,18 +276,18 @@ function CreateClusterModal({
       }
     >
       <div className="flex flex-col gap-3">
-        <Field label="Nom du cluster">
+        <Field label="Nom du VM Worker">
           <Input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Mon cluster"
+            placeholder="Mon VM Worker"
             autoFocus
             maxLength={64}
           />
         </Field>
         <Field
           label="Visibilité"
-          hint="Un cluster public apparaît dans le catalogue et peut être modéré par son propriétaire."
+          hint="Un VM Worker public apparaît sur zenode.fr avec un avertissement « cluster de particulier » s’il ne dépend pas de Zenode."
         >
           <Select
             value={visibility}
@@ -292,12 +297,24 @@ function CreateClusterModal({
             <option value="public">Public — catalogue et modération</option>
           </Select>
         </Field>
+        <Field
+          label="Code des bots"
+          hint="Les clusters à code modifié sont listés séparément des clusters classiques et ne sont pas vérifiés par Zenode."
+        >
+          <Select
+            value={customCode ? 'custom' : 'classic'}
+            onChange={(event) => setCustomCode(event.target.value === 'custom')}
+          >
+            <option value="classic">Classique — code officiel Zenode</option>
+            <option value="custom">Code modifié — fork personnel</option>
+          </Select>
+        </Field>
         <Field label="Description" hint="Facultatif.">
           <Textarea
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             rows={3}
-            placeholder="À quoi sert ce cluster ?"
+            placeholder="À quoi sert ce VM Worker ?"
           />
         </Field>
         <InlineError message={error} />

@@ -458,6 +458,22 @@ pub fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+#[tauri::command]
+pub async fn join_cluster(
+    state: State<'_, AppState>,
+    code: String,
+) -> AppResult<Value> {
+    state.core.join_cluster(&code).await
+}
+
+#[tauri::command]
+pub async fn leave_cluster(
+    state: State<'_, AppState>,
+    cluster_id: String,
+) -> AppResult<Value> {
+    state.core.leave_cluster(&cluster_id).await
+}
+
 fn open_external(target: &str) -> AppResult<()> {
     #[cfg(target_os = "macos")]
     let result = std::process::Command::new("open").arg(target).spawn();

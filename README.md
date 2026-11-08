@@ -151,10 +151,11 @@ MIT.
 
 ## Development Setup
 
-### Quick Start Script
+### Quick Start Scripts
 
-A convenience script is provided to launch both the Core API and Desktop application in development mode:
+Two convenience scripts are provided to launch both the Core API and Desktop application in development mode:
 
+#### **Standard Script (Fast, simple)**
 ```bash
 # Launch both Core and Desktop app (default)
 ./start-dev.sh
@@ -171,6 +172,23 @@ A convenience script is provided to launch both the Core API and Desktop applica
 # Show help
 ./start-dev.sh --help
 ```
+
+#### **Simple Script (Robust, troubleshooting friendly)**
+```bash
+# Launch both Core and Desktop app (with step-by-step validation)
+./start-dev-simple.sh
+
+# Launch only Core API
+./start-dev-simple.sh  # then choose option 2
+
+# Launch only Desktop app
+./start-dev-simple.sh  # then choose option 3
+
+# Show help
+./start-dev-simple.sh --help
+```
+
+**Recommended**: Use `start-dev.sh` for normal development. Use `start-dev-simple.sh` if you encounter network connection issues or need step-by-step troubleshooting.
 
 ### Manual Development Setup
 
@@ -216,27 +234,74 @@ npm run tauri:build
 npm run build
 ```
 
-### Troubleshooting
+### Stopping Development Services
 
-If you encounter issues with the development script, you can:
+When you're done with development, use the provided script to stop both the Core API and Desktop app gracefully:
 
-1. Check the logs:
+```bash
+# Stop both Core and Desktop app
+./stop-dev.sh
+
+# Stop only Core API
+./stop-dev.sh --core-only
+
+# Stop only Desktop app
+./stop-dev.sh --app-only
+
+# Force stop all processes (emergency)
+./stop-dev.sh --force
+
+# Show help
+./stop-dev.sh --help
+```
+
+**Features**:
+- ✅ Graceful shutdown with SIGTERM
+- ✅ Force stop option for emergency situations
+- ✅ PID file validation and cleanup
+- ✅ Port-based process detection
+- ✅ Comprehensive error handling
+- ✅ Detailed status feedback
+
+**Typical workflow**:
+```bash
+# Start development
+./start-dev.sh
+
+# ... work on your code ...
+
+# Stop services
+./stop-dev.sh
+
+# Or force stop if scripts don't respond
+./stop-dev.sh --force
+```
+
+### Network Troubleshooting
+
+If you encounter network connection issues:
+
+1. **Check if services are running**:
    ```bash
-   tail -f core.log     # Core API logs
-   tail -f app.log      # Desktop app logs
+   ./stop-dev.sh --core-only    # Stop Core API
+   ./stop-dev.sh --app-only     # Stop Desktop app
    ```
 
-2. Install additional terminal multiplexers (tmux or screen) for better process management:
+2. **Restart with validation**:
    ```bash
-   # macOS
-   brew install tmux
-   
-   # Ubuntu/Debian
-   sudo apt install tmux
+   ./stop-dev.sh               # Clean stop
+   ./start-dev-simple.sh       # Start with connectivity testing
    ```
 
-3. Ensure all required dependencies are installed:
+3. **Check network status**:
    ```bash
-   # Core API dependencies (check ../Core/package.json)
-   # Desktop app dependencies (check package.json)
+   curl -s http://localhost:3000/health    # Core API health check
+   curl -s http://localhost:1420/          # Desktop app health check
+   ```
+
+4. **Manual process management** (if scripts fail):
+   ```bash
+   # Find and stop processes manually
+   lsof -ti :3000 | xargs kill -9     # Core API
+   lsof -ti :1420 | xargs kill -9     # Desktop app
    ```

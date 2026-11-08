@@ -148,3 +148,95 @@ n'est accepté que pour `127.0.0.1`/`localhost` en développement.
 ## Licence
 
 MIT.
+
+## Development Setup
+
+### Quick Start Script
+
+A convenience script is provided to launch both the Core API and Desktop application in development mode:
+
+```bash
+# Launch both Core and Desktop app (default)
+./start-dev.sh
+
+# Launch only Core API
+./start-dev.sh --core-only
+
+# Launch only Desktop app
+./start-dev.sh --app-only
+
+# Launch with custom ports
+./start-dev.sh --core-port 3001 --app-port 1421
+
+# Show help
+./start-dev.sh --help
+```
+
+### Manual Development Setup
+
+If you prefer to run the services separately:
+
+```bash
+# Start Core API (in ../Core directory)
+cd ../Core
+npm run dev -- --port 3000
+
+# Start Desktop app (in this directory)
+cd Desktop
+npm run tauri:dev
+```
+
+### Prerequisites
+
+Both the Core API and Desktop app require:
+
+- **Node.js >= 18.0.0**
+- **npm >= 9.0.0**
+- **Rust + Cargo** (for Tauri desktop app)
+
+### Dependencies
+
+```bash
+# Install dependencies for both projects
+cd ../Core
+npm install
+
+cd Desktop
+npm install
+```
+
+### Build Commands
+
+```bash
+# Build the desktop application (produces executable)
+cd Desktop
+npm run tauri:build
+
+# Build frontend assets (if needed)
+npm run build
+```
+
+### Troubleshooting
+
+If you encounter issues with the development script, you can:
+
+1. Check the logs:
+   ```bash
+   tail -f core.log     # Core API logs
+   tail -f app.log      # Desktop app logs
+   ```
+
+2. Install additional terminal multiplexers (tmux or screen) for better process management:
+   ```bash
+   # macOS
+   brew install tmux
+   
+   # Ubuntu/Debian
+   sudo apt install tmux
+   ```
+
+3. Ensure all required dependencies are installed:
+   ```bash
+   # Core API dependencies (check ../Core/package.json)
+   # Desktop app dependencies (check package.json)
+   ```

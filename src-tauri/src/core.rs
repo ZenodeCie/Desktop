@@ -203,9 +203,21 @@ impl CoreClient {
             "app_version": env!("CARGO_PKG_VERSION"),
             "public_key": public_key,
         });
+        // The Core API expects verification_uri to be constructed from request headers.
+        // The baseUrl is extracted by the Core API service from the request itself.
+        // No need to modify the URL format for this request.
         let response = self
             .http_client()
             .post(self.url("/api/desktop/v1/pair/start"))
+            .json(&payload)
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(http_error(response).await);
+        }
+        let response = self
+            .http_client()
+            .post(url)
             .json(&payload)
             .send()
             .await?;
